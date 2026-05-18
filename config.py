@@ -1,4 +1,7 @@
 import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 STORAGE_DIR = "storage"  # directory to cache the generated index
 DATA_DIR = "data"  # directory containing the documents to index
@@ -16,7 +19,7 @@ HISTORY_LEN = 3
 
 MAX_TOKENS = 2048
 
-TEMPERATURE = 0.1
+TEMPERATURE = 0
 
 TOP_K = 5
 
@@ -39,6 +42,7 @@ ZHIPU_API_KEY = os.getenv("ZHIPU_API_KEY", "")
 MOONSHOT_API_KEY = os.getenv("MOONSHOT_API_KEY", "")
 DEEPSEEK_API_KEY = os.getenv("DEEPSEEK_API_KEY", "")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+DASHSCOPE_API_KEY = os.getenv("DASHSCOPE_API_KEY", "")
 
 LLM_API_LIST = {
     # Ollama API
@@ -46,6 +50,13 @@ LLM_API_LIST = {
         "api_base": OLLAMA_API_URL,
         "models": [],
         "provider": "Ollama",
+    },
+    # Aliyun Bailian API, OpenAI compatible mode
+    "Aliyun": {
+        "api_key": DASHSCOPE_API_KEY,
+        "api_base": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        "models": ["qwen-plus", "qwen-flash", "qwen-turbo"],
+        "provider": "Aliyun",
     },
     # OpenAI API
     "OpenAI": {
@@ -103,8 +114,11 @@ CHAT_STORE_KEY = "user1"
 HF_ENDPOINT = "https://hf-mirror.com" # Default to be "https://huggingface.co"
 
 # Configure Embedding model
-DEFAULT_EMBEDDING_MODEL = "bge-small-zh-v1.5"
+ALIYUN_EMBEDDING_MODEL = "text-embedding-v4"
+ALIYUN_EMBEDDING_DIMENSIONS = 1024
+DEFAULT_EMBEDDING_MODEL = ALIYUN_EMBEDDING_MODEL
 EMBEDDING_MODEL_PATH = {
+    ALIYUN_EMBEDDING_MODEL: None,
     "bge-small-zh-v1.5": "BAAI/bge-small-zh-v1.5",
     "bge-large-zh-v1.5": "BAAI/bge-large-zh-v1.5",
 }

@@ -2,10 +2,18 @@
 import os
 from llama_index.core import Settings
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
-from config import DEFAULT_EMBEDDING_MODEL, EMBEDDING_MODEL_PATH, MODEL_DIR
+from config import (
+    ALIYUN_EMBEDDING_MODEL,
+    DEFAULT_EMBEDDING_MODEL,
+    EMBEDDING_MODEL_PATH,
+    MODEL_DIR,
+)
 from server.utils.hf_mirror import use_hf_mirror
 
 def create_embedding_model(model_name = DEFAULT_EMBEDDING_MODEL) -> HuggingFaceEmbedding:
+    if model_name == ALIYUN_EMBEDDING_MODEL:
+        return create_aliyun_embedding()
+
     try:
         use_hf_mirror()
         model_path = EMBEDDING_MODEL_PATH[model_name]
@@ -21,3 +29,11 @@ def create_embedding_model(model_name = DEFAULT_EMBEDDING_MODEL) -> HuggingFaceE
         Settings.embed_model = None
 
     return Settings.embed_model
+
+def create_aliyun_embedding():
+    from src.embeddings.cached_embedding import CachedAliyunEmbedding
+
+    embed_model = CachedAliyunEmbedding()
+    Settings.embed_model = embed_model
+    print(f"created Aliyun embedding model: {ALIYUN_EMBEDDING_MODEL}")
+    return embed_model

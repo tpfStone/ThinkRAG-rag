@@ -6,10 +6,22 @@ data/
 
 # Local Storage
 storage/
+.embedding_cache/
 .chroma/
 .lancedb/
+
+# Local app logs
+streamlit.out.log
+streamlit.err.log
+
+# Generated evaluation artifacts
+results/results_C*.csv
+results/charts/
+
 # Test files
 test_*.*
+!tests/
+!tests/test_*.py
 
 # Python venv
 .venv/

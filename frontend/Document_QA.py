@@ -1,14 +1,27 @@
 # Document-based Q&A
+from pathlib import Path
 import time
 import re
 import streamlit as st
 import pandas as pd
+import yaml
 from server.stores.chat_store import CHAT_MEMORY
 from llama_index.core.llms import ChatMessage, MessageRole
 from server.engine import create_query_engine
 from server.stores.config_store import CONFIG_STORE
 
+def perform_pipeline_query(prompt):
+    return st.session_state.rag_pipeline.answer(prompt)
+
 def perform_query(prompt):
+    if st.session_state.get("rag_pipeline") is not None:
+        try:
+            return perform_pipeline_query(prompt)
+        except Exception as e:
+            print(f"Pipeline query failed: {type(e).__name__}: {e}")
+            st.session_state.rag_pipeline = None
+            st.warning("RAGPipeline failed. Falling back to the original query engine.")
+
     if not st.session_state.query_engine:
         print("Index is not initialized yet")
     if (not prompt) or prompt.strip() == "":
@@ -41,6 +54,63 @@ def simple_format_response_and_sources(response):
     output['sources'] = sources
     return output
 
+def initialize_rag_pipeline(index):
+    try:
+        from src.rag.pipeline import RAGPipeline
+
+        config_path = Path(__file__).resolve().parents[1] / "configs" / "C4_full.yaml"
+        with config_path.open("r", encoding="utf-8") as f:
+            pipe_cfg = yaml.safe_load(f)
+        st.session_state.rag_pipeline = RAGPipeline(pipe_cfg, index=index)
+        print("RAGPipeline initialized with configs/C4_full.yaml")
+    except Exception as e:
+        st.session_state.rag_pipeline = None
+        print(f"RAGPipeline initialization skipped: {type(e).__name__}: {e}")
+
+def render_confidence(result):
+    if result.get("refused"):
+        st.warning(f"Refused: {result.get('refusal_reason', 'unknown')}")
+        return
+
+    label = result.get("consistency_label", "N/A")
+    reason = result.get("consistency_reason", "")
+    if label == "Y":
+        st.success(f"Confidence Y - {reason}")
+    elif label == "P":
+        st.warning(f"Confidence P - {reason}")
+    elif label == "N":
+        st.error(f"Confidence N - {reason}")
+    else:
+        st.info("Confidence N/A")
+
+def render_pipeline_response(response, query_time):
+    answer = response.get("answer", "")
+    st.write(answer)
+    render_confidence(response)
+    st.write(f"Took {query_time} second(s)")
+
+    details = response.get("source_details", [])
+    details_title = f"Found {len(details)} document(s), max score {response.get('max_score', 0.0):.3f}"
+    with st.expander(details_title, expanded=False):
+        if details:
+            source_nodes = []
+            for item in details:
+                text = item.get("text", "")
+                short_text = text[:80] + "..." if len(text) > 80 else text
+                source_nodes.append(
+                    {
+                        "Title": item.get("file", "N/A"),
+                        "Page": item.get("page", "N/A"),
+                        "Text": short_text,
+                        "Score": f"{item.get('score', 0.0):.3f}",
+                    }
+                )
+            st.table(pd.DataFrame(source_nodes))
+        else:
+            st.write("No source details.")
+
+    return answer
+
 def chatbox():
 
     # Load Q&A history
@@ -67,6 +137,9 @@ def chatbox():
                 query_time = round(end_time - start_time, 2)
                 if response is None:
                     st.write("Couldn't come up with an answer.")
+                elif isinstance(response, dict):
+                    response_text = render_pipeline_response(response, query_time)
+                    CHAT_MEMORY.put(ChatMessage(role=MessageRole.ASSISTANT, content=response_text))
                 else:
                     try:
                         response_text = st.write_stream(response.response_gen)
@@ -123,6 +196,7 @@ def main():
                     top_k=current_llm_settings["top_k"],
                     top_n=current_llm_settings["top_n"],
                     reranker=current_llm_settings["reranker_model"])
+                initialize_rag_pipeline(st.session_state.index_manager.index)
                 print("Index loaded and query engine created")
                 chatbox()
             else:

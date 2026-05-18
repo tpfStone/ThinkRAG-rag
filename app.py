@@ -7,6 +7,10 @@ logging.getLogger().addHandler(logging.StreamHandler(stream=sys.stdout))
 
 # Configure the Streamlit Web Application
 import streamlit as st
+from dotenv import load_dotenv
+
+load_dotenv()
+
 from frontend.state import init_state
 
 if __name__ == '__main__':

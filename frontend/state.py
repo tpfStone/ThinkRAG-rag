@@ -51,6 +51,9 @@ def init_keys():
     if "query_engine" not in st.session_state.keys():
         st.session_state.query_engine = None
 
+    if "rag_pipeline" not in st.session_state.keys():
+        st.session_state.rag_pipeline = None
+
     if "system_prompt" not in st.session_state.keys():
         st.session_state.system_prompt = "Chat with me!"
         
@@ -97,6 +100,7 @@ def init_keys():
 def init_llm_sp():
 
     llm_options = list(config.LLM_API_LIST.keys())
+    default_provider = "Aliyun" if "Aliyun" in llm_options else llm_options[0]
 
     # LLM service provider selection
     if "llm_service_provider_selected" not in st.session_state:
@@ -104,7 +108,7 @@ def init_llm_sp():
         if sp:
             st.session_state.llm_service_provider_selected = sp["llm_service_provider_selected"]
         else:
-            st.session_state.llm_service_provider_selected = llm_options[0]
+            st.session_state.llm_service_provider_selected = default_provider
 
 def init_ollama_endpoint():
     # Initialize Ollama endpoint
@@ -152,12 +156,15 @@ def init_api_key(sp):
         valid_key = api_key + "_valid"
         if valid_key not in st.session_state.keys():
             valid_result = CONFIG_STORE.get(key=valid_key)
-            if valid_result is None and st.session_state[api_key] is not None:
+            if valid_result is None and st.session_state[api_key] not in (None, ""):
                 current_base = st.session_state[sp + "_api_base"] if (sp + "_api_base") in st.session_state else config.LLM_API_LIST[sp]["api_base"]
                 current_base = current_base.strip().replace("`", "")
                 is_valid = check_openai_llm(st.session_state[sp + "_model_selected"], current_base, st.session_state[api_key])
                 CONFIG_STORE.put(key=valid_key, val={valid_key: is_valid})
                 st.session_state[valid_key] = is_valid
+            elif valid_result is None:
+                st.session_state[valid_key] = False
+                CONFIG_STORE.put(key=valid_key, val={valid_key: False})
             else:
                 st.session_state[valid_key] = valid_result[valid_key]
 

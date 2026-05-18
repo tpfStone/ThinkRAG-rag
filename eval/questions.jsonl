@@ -1,0 +1,2 @@
+{"id":"sample_001","question":"请根据知识库概括主要内容。","answerable":true,"gold_answer":""}
+{"id":"sample_002","question":"明天天气怎么样？","answerable":false,"gold_answer":"根据现有知识库，未找到相关信息。"}

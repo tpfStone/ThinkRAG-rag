@@ -18,3 +18,10 @@ llama-index-storage-chat_store-redis==0.3.2
 llama_index.storage.docstore.redis==0.2.0
 llama_index.storage.index_store.redis==0.3.0
 docx2txt==0.8
+requests
+python-dotenv
+openai
+pyyaml
+pandas
+matplotlib
+pytest
