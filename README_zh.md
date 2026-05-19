@@ -75,6 +75,8 @@ DASHSCOPE_WORKSPACE_ID=
 DASHSCOPE_CATEGORY_ID=
 ```
 
+`DASHSCOPE_WORKSPACE_ID` 和 `DASHSCOPE_CATEGORY_ID` 是可选项。除非你的阿里云文档解析配置要求指定 workspace 或 category，否则保持为空即可。
+
 ### 3. 运行测试
 
 ```bash

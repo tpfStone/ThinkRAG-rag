@@ -67,12 +67,18 @@ cp .env.example .env
 
 ```env
 DASHSCOPE_API_KEY=your_dashscope_api_key
+THINKRAG_PARSE_PROVIDER=auto
+THINKRAG_PARSE_CACHE_DIR=storage/parsed
+DASHSCOPE_WORKSPACE_ID=
+DASHSCOPE_CATEGORY_ID=
 ```
 
 注意：
 
 - `.env` 不要提交到 Git。
 - `.env.example` 可以提交，但不能写真实 key。
+- `DASHSCOPE_WORKSPACE_ID` 和 `DASHSCOPE_CATEGORY_ID` 是可选项；只有阿里云文档解析配置要求指定工作空间或类目时才需要填写。
+- 当前复杂 PDF、扫描 PDF 或原生抽取质量较差的 PDF 通过 DashScopeParse / 阿里云文档智能 API 补充解析，不需要本地 OCR 依赖。
 - 如果已经启动过 Streamlit，修改 `.env` 后需要重启应用。
 
 ## 5. 运行自动化测试

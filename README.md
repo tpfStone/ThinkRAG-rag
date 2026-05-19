@@ -75,6 +75,8 @@ DASHSCOPE_WORKSPACE_ID=
 DASHSCOPE_CATEGORY_ID=
 ```
 
+`DASHSCOPE_WORKSPACE_ID` and `DASHSCOPE_CATEGORY_ID` are optional. Keep them empty unless your Alibaba Cloud document parsing setup requires a specific workspace or category.
+
 ### 3. Run Tests
 
 ```bash
