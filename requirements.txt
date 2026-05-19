@@ -20,7 +20,6 @@ llama_index.storage.index_store.redis==0.3.0
 llama-index-readers-dashscope==0.2.0
 llama-index-node-parser-dashscope==0.3.0
 docx2txt==0.8
-pymupdf>=1.24
 requests
 python-dotenv
 openai

@@ -435,7 +435,7 @@ def _should_use_dashscope(provider_name: str, file_path: Path, native_file_repor
         return True
     if provider_name != "auto":
         raise ValueError(f"Unsupported THINKRAG_PARSE_PROVIDER: {provider_name}")
-    return file_path.suffix.lower() == ".pdf" and bool((native_file_report or {}).get("needs_ocr", False))
+    return file_path.suffix.lower() == ".pdf" and bool((native_file_report or {}).get("needs_api_parse", False))
 
 
 def _first_file_report(quality_report: dict[str, Any], file_name: str) -> dict[str, Any] | None:

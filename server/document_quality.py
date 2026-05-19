@@ -14,7 +14,7 @@ AVG_TEXT_LEN_WARNING = 100
 
 BAD_PAGE_STATUSES = {"empty", "too_short", "garbled", "low_readability"}
 INDEXABLE_PAGE_STATUSES = {"ok"}
-OCR_FALLBACK_PAGE_STATUSES = {"empty", "too_short"}
+API_PARSE_PAGE_STATUSES = {"empty", "too_short"}
 
 _HYPHENATED_LINE_BREAK_RE = re.compile(r"([A-Za-z]+)-[ \t]*\n[ \t]*([a-z]+)")
 _HORIZONTAL_SPACE_RE = re.compile(r"[ \t\f\v]+")
@@ -82,7 +82,7 @@ def assess_page_quality(text: str | None) -> dict[str, Any]:
         "text_len": text_len,
         "weird_ratio": weird_ratio,
         "readable_ratio": readable_ratio,
-        "needs_ocr": status in OCR_FALLBACK_PAGE_STATUSES,
+        "needs_api_parse": status in API_PARSE_PAGE_STATUSES,
     }
 
 
@@ -96,9 +96,9 @@ def filter_indexable_documents(documents: list[Any]) -> list[Any]:
     return indexable_documents
 
 
-def should_ocr_page(text: str | None, quality: dict[str, Any] | None = None) -> bool:
+def should_api_parse_page(text: str | None, quality: dict[str, Any] | None = None) -> bool:
     quality = quality or assess_page_quality(text)
-    return quality.get("status") in OCR_FALLBACK_PAGE_STATUSES
+    return quality.get("status") in API_PARSE_PAGE_STATUSES
 
 
 def prepare_documents_for_indexing(documents: list[Any]) -> tuple[list[Any], dict[str, Any]]:
@@ -133,7 +133,7 @@ def _analyze_documents(documents: list[Any], clean_documents: bool) -> list[dict
                 "text_len": quality["text_len"],
                 "weird_ratio": quality["weird_ratio"],
                 "readable_ratio": quality["readable_ratio"],
-                "needs_ocr": quality["needs_ocr"],
+                "needs_api_parse": quality["needs_api_parse"],
             }
         )
     return page_results
@@ -172,7 +172,7 @@ def _build_report_from_page_results(page_results: list[dict[str, Any]]) -> dict[
             status = "ok"
             reason = "extractable_text"
 
-        needs_ocr = status == "bad" and (empty_ratio > 0.5 or avg_text_len < MIN_PAGE_TEXT_LEN)
+        needs_api_parse = status == "bad" and (empty_ratio > 0.5 or avg_text_len < MIN_PAGE_TEXT_LEN)
         total_indexable += indexable_pages
         total_skipped += total_pages - indexable_pages
         files.append(
@@ -184,7 +184,7 @@ def _build_report_from_page_results(page_results: list[dict[str, Any]]) -> dict[
                 "empty_pages": empty_pages,
                 "bad_pages": bad_pages,
                 "avg_text_len": avg_text_len,
-                "needs_ocr": needs_ocr,
+                "needs_api_parse": needs_api_parse,
             }
         )
 

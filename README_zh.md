@@ -73,7 +73,6 @@ THINKRAG_PARSE_PROVIDER=auto
 THINKRAG_PARSE_CACHE_DIR=storage/parsed
 DASHSCOPE_WORKSPACE_ID=
 DASHSCOPE_CATEGORY_ID=
-THINKRAG_OCR_ENABLED=false
 ```
 
 ### 3. 运行测试
@@ -96,11 +95,11 @@ http://localhost:8501
 
 ## 文档解析范围
 
-ThinkRAG 仍以原生文本抽取作为主路径。`THINKRAG_PARSE_PROVIDER=auto` 时，PDF 页面抽取文本为空或过短会触发 DashScopeParse / 阿里云文档智能解析，解析后的节点会带上 `parse_provider` 元数据并进入索引。
+ThinkRAG 仍以原生文本抽取作为主路径。`THINKRAG_PARSE_PROVIDER=auto` 时，复杂 PDF、扫描 PDF 或原生抽取质量较差的 PDF 若页面文本为空或过短，会触发 DashScopeParse / 阿里云文档智能解析，解析后的节点会带上 `parse_provider` 元数据并进入索引。
 
 解析结果会按文件内容 hash 缓存在 `storage/parsed/{sha256}.json`，同一文件不会重复提交 API。完整重建索引会先写入 `storage_staging/`，只有新索引持久化成功后才替换正式 `storage/`。
 
-本地 PaddleOCR 已从默认依赖和默认入库链路移除。`server/ocr/` 作为 legacy/可选代码保留；如果要使用本地 OCR，需要单独安装 PaddleOCR 依赖并显式接入该路径。
+当前文档修复解析路径使用阿里云 API，不要求安装本地 OCR 依赖。
 
 ## 评测流程
 

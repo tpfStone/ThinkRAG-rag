@@ -15,12 +15,6 @@ THINKRAG_PARSE_CACHE_DIR = os.getenv("THINKRAG_PARSE_CACHE_DIR", os.path.join(ST
 DASHSCOPE_WORKSPACE_ID = os.getenv("DASHSCOPE_WORKSPACE_ID", "")
 DASHSCOPE_CATEGORY_ID = os.getenv("DASHSCOPE_CATEGORY_ID", "")
 
-# Legacy local OCR fallback. It is disabled by default and no longer used by the
-# default ingestion path.
-OCR_FALLBACK_ENABLED = os.getenv("THINKRAG_OCR_ENABLED", "false").lower() in {"1", "true", "yes", "on"}
-OCR_LANG = os.getenv("THINKRAG_OCR_LANG", "ch")
-OCR_DPI = int(os.getenv("THINKRAG_OCR_DPI", "300"))
-
 # The device that used for running the model. 
 # Set it to 'auto' will automatically detect (with warnings), or it can be manually set to one of 'cuda', 'mps', 'cpu', or 'xpu'.
 LLM_DEVICE = "auto"

@@ -73,7 +73,6 @@ THINKRAG_PARSE_PROVIDER=auto
 THINKRAG_PARSE_CACHE_DIR=storage/parsed
 DASHSCOPE_WORKSPACE_ID=
 DASHSCOPE_CATEGORY_ID=
-THINKRAG_OCR_ENABLED=false
 ```
 
 ### 3. Run Tests
@@ -96,11 +95,11 @@ http://localhost:8501
 
 ## Document Parsing Scope
 
-ThinkRAG keeps native text extraction as the primary ingestion path. When PDF text extraction is empty or too short, `THINKRAG_PARSE_PROVIDER=auto` routes the file to DashScopeParse / Alibaba Cloud Document Mind and indexes the returned text nodes with `parse_provider` metadata.
+ThinkRAG keeps native text extraction as the primary ingestion path. When complex PDFs, scanned PDFs, or PDFs with poor native extraction have empty or too-short text, `THINKRAG_PARSE_PROVIDER=auto` routes the file to DashScopeParse / Alibaba Cloud Document Mind and indexes the returned text nodes with `parse_provider` metadata.
 
 Parsed results are cached under `storage/parsed/{sha256}.json`, so the same file content is not submitted repeatedly. Full rebuilds write to `storage_staging/` first and only replace the active index after the new index is persisted successfully.
 
-Local PaddleOCR is no longer part of the default dependency set or ingestion path. The legacy `server/ocr/` code is kept for reference; using it requires installing PaddleOCR dependencies separately and wiring that optional path explicitly.
+The current document repair path uses Alibaba Cloud APIs and does not require local OCR dependencies.
 
 ## Evaluation
 

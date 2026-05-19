@@ -5,7 +5,7 @@ from server.document_quality import (
     build_quality_report,
     clean_text,
     prepare_documents_for_indexing,
-    should_ocr_page,
+    should_api_parse_page,
 )
 
 
@@ -30,8 +30,8 @@ def test_clean_text_normalizes_spacing_and_blank_lines():
 def test_assess_page_quality_detects_empty_and_short_text():
     assert assess_page_quality("")["status"] == "empty"
     assert assess_page_quality("short text")["status"] == "too_short"
-    assert should_ocr_page("") is True
-    assert should_ocr_page("short text") is True
+    assert should_api_parse_page("") is True
+    assert should_api_parse_page("short text") is True
 
 
 def test_assess_page_quality_detects_garbled_text():
@@ -48,7 +48,7 @@ def test_assess_page_quality_detects_low_readability():
     assert result["readable_ratio"] < 0.5
 
 
-def test_build_quality_report_marks_all_empty_pdf_as_bad_and_needs_ocr():
+def test_build_quality_report_marks_all_empty_pdf_as_bad_and_needs_api_parse():
     documents = [
         doc("", "empty.pdf", "1"),
         doc("", "empty.pdf", "2"),
@@ -60,7 +60,7 @@ def test_build_quality_report_marks_all_empty_pdf_as_bad_and_needs_ocr():
     assert item["file_name"] == "empty.pdf"
     assert item["status"] == "bad"
     assert item["reason"] == "too_many_empty_pages"
-    assert item["needs_ocr"] is True
+    assert item["needs_api_parse"] is True
     assert report["summary"]["indexable_documents"] == 0
     assert report["summary"]["skipped_documents"] == 2
 

@@ -76,7 +76,7 @@ def render_quality_report(report, use_expander=True):
     warning_files = int(summary.get("warning_files", 0))
     indexable_documents = int(summary.get("indexable_documents", 0))
     skipped_documents = int(summary.get("skipped_documents", 0))
-    parse_report = report.get("parse") or report.get("ocr") or {}
+    parse_report = report.get("parse") or {}
     parse_candidate_pages = int(summary.get("parse_candidate_pages", parse_report.get("candidate_pages", 0) or 0))
     parse_repaired_pages = int(summary.get("parse_repaired_pages", parse_report.get("repaired_pages", 0) or 0))
     parse_failed_pages = int(summary.get("parse_failed_pages", parse_report.get("failed_pages", 0) or 0))
@@ -116,7 +116,7 @@ def render_quality_report(report, use_expander=True):
                 "Empty": item.get("empty_pages", 0),
                 "Low quality": item.get("bad_pages", 0),
                 "Avg text len": item.get("avg_text_len", 0),
-                "Needs API parse": item.get("needs_ocr", False),
+                "Needs API parse": item.get("needs_api_parse", False),
                 "Parse source": item.get("parse_source", "native"),
                 "Parse status": item.get("parse_status", "success"),
                 "Parse pages": item.get("parse_candidate_pages", 0),

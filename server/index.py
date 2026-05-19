@@ -90,7 +90,7 @@ class IndexManager:
             self.init_index(nodes=nodes)
         return self.index
 
-    def load_dir(self, input_dir, chunk_size, chunk_overlap, use_ocr=None):
+    def load_dir(self, input_dir, chunk_size, chunk_overlap, use_api_parse=None):
         Settings.chunk_size = chunk_size
         Settings.chunk_overlap = chunk_overlap
         files = list_input_files(input_dir)
@@ -100,12 +100,12 @@ class IndexManager:
         parsed = parse_input_files(files, chunk_size, chunk_overlap)
         return self._ingest_parsed_files(parsed)
 
-    def rebuild_dir(self, input_dir, chunk_size, chunk_overlap, use_ocr=None):
+    def rebuild_dir(self, input_dir, chunk_size, chunk_overlap, use_api_parse=None):
         if not DEV_MODE:
             raise RuntimeError("Full rebuild staging is only implemented for development file storage.")
         return self._rebuild_dir_with_staging(input_dir, chunk_size, chunk_overlap)
 
-    def load_files(self, uploaded_files, chunk_size, chunk_overlap, use_ocr=None):
+    def load_files(self, uploaded_files, chunk_size, chunk_overlap, use_api_parse=None):
         Settings.chunk_size = chunk_size
         Settings.chunk_overlap = chunk_overlap
         save_dir = get_save_dir()
