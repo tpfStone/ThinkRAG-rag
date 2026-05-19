@@ -37,7 +37,6 @@ def save_current_llm_info():
                 "service_provider": sp,
                 "model": st.session_state[model_key],
                 "api_base": st.session_state[base_key],
-                "api_key": st.session_state[api_key],
                 "api_key_valid": st.session_state[api_key + "_valid"],
             })
         else:
@@ -124,9 +123,6 @@ def change_llm_api_base():
 def change_llm_api_key():
     name = option + "_api_key" # e.g. "OpenAI_api_key"
     st.session_state[name] = st.session_state.llm_api_key
-    CONFIG_STORE.put(key=name, val={
-        name: st.session_state.llm_api_key, 
-    })
     is_valid = check_openai_llm(st.session_state.llm_api_model, st.session_state.llm_api_endpoint.strip().replace("`", ""), st.session_state.llm_api_key)
     st.session_state[name + "_valid"] = is_valid
     CONFIG_STORE.put(key=name + "_valid", val={ # e.g. "OpenAI_api_key_valid"

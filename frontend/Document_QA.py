@@ -1,5 +1,6 @@
 # Document-based Q&A
 from pathlib import Path
+import copy
 import time
 import re
 import streamlit as st
@@ -54,34 +55,74 @@ def simple_format_response_and_sources(response):
     output['sources'] = sources
     return output
 
-def initialize_rag_pipeline(index):
+def build_pipeline_config(pipe_cfg, current_llm_settings, current_llm_info):
+    pipe_cfg = copy.deepcopy(pipe_cfg)
+    current_llm_settings = current_llm_settings or {}
+    current_llm_info = current_llm_info or {}
+
+    retrieval_cfg = pipe_cfg.setdefault("retrieval", {})
+    top_k = int(current_llm_settings.get("top_k", retrieval_cfg.get("top_k", 5)))
+    use_reranker = bool(current_llm_settings.get("use_reranker", retrieval_cfg.get("use_reranker", False)))
+    retrieval_cfg["top_k"] = top_k
+    retrieval_cfg["use_reranker"] = use_reranker
+    retrieval_cfg["initial_top_k"] = max(int(retrieval_cfg.get("initial_top_k", top_k)), top_k) if use_reranker else top_k
+
+    prompt_cfg = pipe_cfg.setdefault("prompt", {})
+    prompt_cfg["strict_mode"] = bool(current_llm_settings.get("strict_mode", prompt_cfg.get("strict_mode", False)))
+
+    refuse_gate_cfg = pipe_cfg.setdefault("refuse_gate", {})
+    refuse_gate_cfg["enabled"] = bool(
+        current_llm_settings.get("use_refuse_gate", refuse_gate_cfg.get("enabled", False))
+    )
+
+    consistency_cfg = pipe_cfg.setdefault("consistency_check", {})
+    consistency_cfg["enabled"] = bool(
+        current_llm_settings.get("use_consistency_check", consistency_cfg.get("enabled", False))
+    )
+
+    llm_cfg = pipe_cfg.setdefault("llm", {})
+    llm_cfg["temperature"] = current_llm_settings.get("temperature", llm_cfg.get("temperature", 0))
+    if current_llm_info.get("service_provider") == "Aliyun":
+        llm_cfg["model"] = current_llm_info.get("model", llm_cfg.get("model", "qwen-plus"))
+
+    return pipe_cfg
+
+def initialize_rag_pipeline(index, current_llm_settings=None, current_llm_info=None):
     try:
         from src.rag.pipeline import RAGPipeline
 
         config_path = Path(__file__).resolve().parents[1] / "configs" / "C4_full.yaml"
         with config_path.open("r", encoding="utf-8") as f:
             pipe_cfg = yaml.safe_load(f)
+        pipe_cfg = build_pipeline_config(pipe_cfg, current_llm_settings, current_llm_info)
         st.session_state.rag_pipeline = RAGPipeline(pipe_cfg, index=index)
-        print("RAGPipeline initialized with configs/C4_full.yaml")
+        print(
+            "RAGPipeline initialized with configs/C4_full.yaml "
+            f"(top_k={pipe_cfg['retrieval']['top_k']}, "
+            f"use_reranker={pipe_cfg['retrieval']['use_reranker']})"
+        )
     except Exception as e:
         st.session_state.rag_pipeline = None
         print(f"RAGPipeline initialization skipped: {type(e).__name__}: {e}")
 
 def render_confidence(result):
     if result.get("refused"):
-        st.warning(f"Refused: {result.get('refusal_reason', 'unknown')}")
+        st.warning(f"Answer blocked by retrieval gate: {result.get('refusal_reason', 'unknown')}")
         return
 
     label = result.get("consistency_label", "N/A")
     reason = result.get("consistency_reason", "")
     if label == "Y":
-        st.success(f"Confidence Y - {reason}")
+        st.success(f"Answer support: High (Y) - {reason}")
     elif label == "P":
-        st.warning(f"Confidence P - {reason}")
+        st.warning(f"Answer support: Partial (P) - {reason}")
     elif label == "N":
-        st.error(f"Confidence N - {reason}")
+        st.error(f"Answer support: Low (N) - {reason}")
     else:
-        st.info("Confidence N/A")
+        detail = f" - {reason}" if reason else ""
+        st.info(f"Answer support: Not checked{detail}")
+        if not reason:
+            st.caption("Enable Consistency Check in Advanced settings to verify the answer against retrieved evidence.")
 
 def render_pipeline_response(response, query_time):
     answer = response.get("answer", "")
@@ -90,9 +131,11 @@ def render_pipeline_response(response, query_time):
     st.write(f"Took {query_time} second(s)")
 
     details = response.get("source_details", [])
-    details_title = f"Found {len(details)} document(s), max score {response.get('max_score', 0.0):.3f}"
+    details_title = f"Retrieved evidence: {len(details)} chunk(s), highest relevance {response.get('max_score', 0.0):.3f}"
     with st.expander(details_title, expanded=False):
         if details:
+            if any(not str(item.get("text", "")).strip() for item in details):
+                st.warning("Retrieved source has empty text. Rebuild index after document parsing.")
             source_nodes = []
             for item in details:
                 text = item.get("text", "")
@@ -101,8 +144,9 @@ def render_pipeline_response(response, query_time):
                     {
                         "Title": item.get("file", "N/A"),
                         "Page": item.get("page", "N/A"),
+                        "Extraction": item.get("extraction_method", "native"),
                         "Text": short_text,
-                        "Score": f"{item.get('score', 0.0):.3f}",
+                        "Relevance": f"{item.get('score', 0.0):.3f}",
                     }
                 )
             st.table(pd.DataFrame(source_nodes))
@@ -152,7 +196,7 @@ def chatbox():
                         response_text = str(response)
                         st.write(response_text)
                     st.write(f"Took {query_time} second(s)")
-                    details_title = f"Found {len(response.source_nodes)} document(s)"
+                    details_title = f"Retrieved evidence: {len(response.source_nodes)} chunk(s)"
                     with st.expander(
                             details_title,
                             expanded=False,
@@ -168,7 +212,7 @@ def chatbox():
                             page_label = node.metadata.get('page_label', 'N/A')
                             text = node.text
                             short_text = text[:50] + "..." if len(text) > 50 else text
-                            source_nodes.append({"Title": title, "Page": page_label, "Text": short_text, "Score": f"{score:.2f}"})
+                            source_nodes.append({"Title": title, "Page": page_label, "Text": short_text, "Relevance": f"{score:.2f}"})
                         df = pd.DataFrame(source_nodes)
                         st.table(df)
                     # store the answer in the chat history
@@ -184,7 +228,10 @@ def main():
                    "` Temperature `" + str(current_llm_settings["temperature"]) + 
                    "` Reranking `" + str(current_llm_settings["use_reranker"]) + 
                    "` Top N `" + str(current_llm_settings["top_n"]) + 
-                   "` Reranker `" + current_llm_settings["reranker_model"] + "`"
+                   "` Reranker `" + current_llm_settings["reranker_model"] +
+                   "` Strict `" + str(current_llm_settings.get("strict_mode", True)) +
+                   "` Refusal Gate `" + str(current_llm_settings.get("use_refuse_gate", True)) +
+                   "` Consistency Check `" + str(current_llm_settings.get("use_consistency_check", True)) + "`"
                    )
         if st.session_state.index_manager is not None:
             if st.session_state.index_manager.check_index_exists():
@@ -196,7 +243,11 @@ def main():
                     top_k=current_llm_settings["top_k"],
                     top_n=current_llm_settings["top_n"],
                     reranker=current_llm_settings["reranker_model"])
-                initialize_rag_pipeline(st.session_state.index_manager.index)
+                initialize_rag_pipeline(
+                    st.session_state.index_manager.index,
+                    current_llm_settings=current_llm_settings,
+                    current_llm_info=current_llm_info,
+                )
                 print("Index loaded and query engine created")
                 chatbox()
             else:

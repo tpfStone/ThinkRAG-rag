@@ -1,7 +1,6 @@
 import os
 
 import requests
-from dotenv import load_dotenv
 
 ALIYUN_RERANK_URL = "https://dashscope.aliyuncs.com/compatible-api/v1/reranks"
 ALIYUN_RERANK_MODEL = "qwen3-rerank"
@@ -11,7 +10,6 @@ def aliyun_rerank(query: str, candidates: list[str], top_n: int = 5) -> list[tup
     if not candidates:
         return []
 
-    load_dotenv()
     api_key = os.getenv("DASHSCOPE_API_KEY", "")
     if not api_key:
         raise ValueError("DASHSCOPE_API_KEY is not set. Please configure it in ThinkRAG/.env.")

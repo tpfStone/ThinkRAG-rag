@@ -7,10 +7,109 @@ from server.models.embedding import create_embedding_model
 from server.index import IndexManager
 from server.stores.config_store import CONFIG_STORE
 
+PIPELINE_SETTING_DEFAULTS = {
+    "strict_mode": True,
+    "use_refuse_gate": True,
+    "use_consistency_check": True,
+}
+
+def _local_embedding_model_exists(model_name):
+    model_path = config.EMBEDDING_MODEL_PATH.get(model_name)
+    if model_path is None or config.MODEL_DIR is None:
+        return False
+
+    from pathlib import Path
+
+    return (Path(config.MODEL_DIR) / model_path).exists()
+
+def _normalize_llm_settings(current_llm_settings):
+    normalized_settings = current_llm_settings.copy()
+    settings_changed = False
+
+    for key, value in PIPELINE_SETTING_DEFAULTS.items():
+        if key not in normalized_settings:
+            normalized_settings[key] = value
+            settings_changed = True
+
+    embedding_model = normalized_settings.get("embedding_model", config.DEFAULT_EMBEDDING_MODEL)
+    uses_local_embedding = embedding_model in config.EMBEDDING_MODEL_PATH and embedding_model != config.ALIYUN_EMBEDDING_MODEL
+
+    if uses_local_embedding and not _local_embedding_model_exists(embedding_model):
+        normalized_settings["embedding_model"] = config.DEFAULT_EMBEDDING_MODEL
+        settings_changed = True
+        print(
+            f"Embedding model migrated from {embedding_model} to "
+            f"{config.DEFAULT_EMBEDDING_MODEL}; local model files were not found."
+        )
+
+    if settings_changed:
+        CONFIG_STORE.put(key="current_llm_settings", val=normalized_settings)
+
+    return normalized_settings
+
 def find_api_by_model(model_name):
     for api_name, api_info in config.LLM_API_LIST.items():
         if model_name in api_info['models']:
             return api_info
+
+def _mask_current_llm_info(current_llm_info):
+    if current_llm_info is None:
+        return None
+    masked = current_llm_info.copy()
+    if masked.get("api_key"):
+        masked["api_key"] = "<configured>"
+    return masked
+
+def _api_key_from_runtime(sp):
+    return st.session_state.get(sp + "_api_key") or config.LLM_API_LIST[sp].get("api_key", "")
+
+def _current_llm_info_from_state():
+    sp = st.session_state.get("llm_service_provider_selected")
+    if sp is None:
+        return None
+
+    if sp == "Ollama":
+        model = st.session_state.get("ollama_model_selected")
+        if model is None:
+            return None
+        return {
+            "service_provider": sp,
+            "model": model,
+        }
+
+    if sp not in config.LLM_API_LIST:
+        return None
+
+    model_key = sp + "_model_selected"
+    base_key = sp + "_api_base"
+    api_key = sp + "_api_key"
+    valid_key = api_key + "_valid"
+
+    model = st.session_state.get(model_key)
+    api_base = st.session_state.get(base_key, config.LLM_API_LIST[sp]["api_base"])
+    api_key_value = _api_key_from_runtime(sp)
+    api_key_valid = st.session_state.get(valid_key, False)
+
+    if model is None or api_base in (None, "") or api_key_value in (None, ""):
+        return None
+
+    return {
+        "service_provider": sp,
+        "model": model,
+        "api_base": api_base,
+        "api_key_valid": api_key_valid,
+    }
+
+def _refresh_current_llm_info_from_state(current_llm_info):
+    state_llm_info = _current_llm_info_from_state()
+    if state_llm_info is None:
+        return current_llm_info
+
+    if current_llm_info != state_llm_info:
+        CONFIG_STORE.put(key="current_llm_info", val=state_llm_info)
+        return state_llm_info
+
+    return current_llm_info
 
 # Initialize st.session_state
 def init_keys():
@@ -150,6 +249,7 @@ def init_api_key(sp):
             api_key_result = CONFIG_STORE.get(key=api_key)
             if api_key_result is not None:
                 st.session_state[api_key] = api_key_result[api_key]
+                CONFIG_STORE.delete(api_key)
             else:
                 st.session_state[api_key] = config.LLM_API_LIST[sp]["api_key"]
         
@@ -173,7 +273,7 @@ def init_llm_settings():
     if "current_llm_settings" not in st.session_state.keys():
         current_llm_settings = CONFIG_STORE.get(key="current_llm_settings")
         if current_llm_settings:
-            st.session_state.current_llm_settings = current_llm_settings
+            st.session_state.current_llm_settings = _normalize_llm_settings(current_llm_settings)
         else:
             st.session_state.current_llm_settings = {
                 "temperature": config.TEMPERATURE,
@@ -184,6 +284,7 @@ def init_llm_settings():
                 "top_n": config.RERANKER_MODEL_TOP_N,
                 "embedding_model": config.DEFAULT_EMBEDDING_MODEL,
                 "reranker_model": config.DEFAULT_RERANKER_MODEL,
+                **PIPELINE_SETTING_DEFAULTS,
             }
             CONFIG_STORE.put(key="current_llm_settings", val=st.session_state.current_llm_settings)
 
@@ -191,8 +292,9 @@ def init_llm_settings():
 # Create LLM instance if there is related information
 def create_llm_instance():
     current_llm_info = CONFIG_STORE.get(key="current_llm_info")
+    current_llm_info = _refresh_current_llm_info_from_state(current_llm_info)
     if current_llm_info is not None:
-        print("Current LLM info: ", current_llm_info)
+        print("Current LLM info: ", _mask_current_llm_info(current_llm_info))
         if current_llm_info["service_provider"] == "Ollama":
             if ollama.is_alive():
                 model_name = current_llm_info["model"]
@@ -204,9 +306,9 @@ def create_llm_instance():
         else:
             model_name = current_llm_info["model"]
             api_base = current_llm_info["api_base"].strip().replace("`", "")
-            api_key = current_llm_info["api_key"]
+            api_key = current_llm_info.get("api_key") or _api_key_from_runtime(current_llm_info["service_provider"])
             api_key_valid = current_llm_info["api_key_valid"]
-            if api_key_valid:
+            if api_key_valid and api_key:
                 print("LLM instance created successfully.")
                 st.session_state.llm = create_openai_llm(
                     model_name=model_name, 
@@ -229,6 +331,7 @@ def init_state():
     init_ollama_endpoint()
     sp = st.session_state.llm_service_provider_selected
     init_api_model(sp)
+    init_api_base(sp)
     init_api_key(sp)
     create_embedding_model(st.session_state["current_llm_settings"]["embedding_model"])
     create_llm_instance()

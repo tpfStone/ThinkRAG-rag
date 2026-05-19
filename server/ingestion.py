@@ -10,19 +10,26 @@ from server.stores.ingestion_cache import INGESTION_CACHE
 
 class AdvancedIngestionPipeline(IngestionPipeline):
     def __init__(
-        self, 
+        self,
+        split_text: bool = True,
     ):
         # Initialize the embedding model, text splitter
         embed_model = Settings.embed_model
         text_splitter = Settings.text_splitter
 
-        # Call the super class's __init__ method with the necessary arguments
-        super().__init__(
-            transformations=[
-                text_splitter,
+        transformations = []
+        if split_text:
+            transformations.append(text_splitter)
+        transformations.extend(
+            [
                 embed_model,
                 ChineseTitleExtractor(), # modified Chinese title enhance: zh_title_enhance
-            ],
+            ]
+        )
+
+        # Call the super class's __init__ method with the necessary arguments
+        super().__init__(
+            transformations=transformations,
             docstore=STORAGE_CONTEXT.docstore,
             vector_store=STORAGE_CONTEXT.vector_store,
             cache=INGESTION_CACHE,
@@ -30,8 +37,10 @@ class AdvancedIngestionPipeline(IngestionPipeline):
         )
 
     # If you need to override the run method or add new methods, you can do so here
-    def run(self, documents):
-        print(f"Load {len(documents)} Documents")
-        nodes = super().run(documents=documents)
+    def run(self, documents=None, nodes=None):
+        documents = documents or []
+        nodes = nodes or []
+        print(f"Load {len(documents)} Documents and {len(nodes)} Nodes")
+        nodes = super().run(documents=documents, nodes=nodes)
         print(f"Ingested {len(nodes)} Nodes")
         return nodes

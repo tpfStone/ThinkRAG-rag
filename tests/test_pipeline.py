@@ -1,7 +1,7 @@
 from types import SimpleNamespace
 
 import src.rag.pipeline as pipeline_module
-from src.rag.pipeline import RAGPipeline
+from src.rag.pipeline import REFUSAL_ANSWER, RAGPipeline
 
 
 class FakeCompletions:
@@ -70,8 +70,50 @@ def test_pipeline_refuses_low_score_results(monkeypatch):
     result = RAGPipeline(config, index=object(), client=client).answer("question")
 
     assert result["refused"] is True
-    assert "未找到相关信息" in result["answer"]
+    assert result["answer"] == REFUSAL_ANSWER
+    assert result["refusal_reason"].startswith("max_score_too_low")
     assert client.chat.completions.calls == []
+
+
+def test_pipeline_refuses_when_retrieved_chunks_are_empty(monkeypatch):
+    FakeRetriever.nodes = [
+        FakeNodeWithScore("", 0.9, "empty.pdf", "n1"),
+        FakeNodeWithScore("   ", 0.8, "empty.pdf", "n2"),
+    ]
+    monkeypatch.setattr(pipeline_module, "SimpleFusionRetriever", FakeRetriever)
+    config = {
+        "retrieval": {"enabled": True, "top_k": 2, "use_reranker": False},
+        "refuse_gate": {"enabled": True, "max_threshold": 0.5, "spread_threshold": 0.05},
+    }
+    client = FakeClient("should not be used")
+
+    result = RAGPipeline(config, index=object(), client=client).answer("question")
+
+    assert result["refused"] is True
+    assert result["refusal_reason"] == "retrieved_chunks_empty"
+    assert result["answer"] == REFUSAL_ANSWER
+    assert result["warnings"][0].startswith("retrieved_chunks_empty:")
+    assert client.chat.completions.calls == []
+
+
+def test_pipeline_skips_empty_chunks_and_answers_with_valid_chunks(monkeypatch):
+    FakeRetriever.nodes = [
+        FakeNodeWithScore("", 0.95, "empty.pdf", "n1"),
+        FakeNodeWithScore("valid evidence", 0.8, "valid.pdf", "n2"),
+    ]
+    monkeypatch.setattr(pipeline_module, "SimpleFusionRetriever", FakeRetriever)
+    config = {
+        "retrieval": {"enabled": True, "top_k": 2, "use_reranker": False},
+        "refuse_gate": {"enabled": True, "max_threshold": 0.5, "spread_threshold": 0.0},
+    }
+
+    result = RAGPipeline(config, index=object(), client=FakeClient("grounded answer")).answer("question")
+
+    assert result["refused"] is False
+    assert result["answer"] == "grounded answer"
+    assert result["sources"] == ["valid.pdf"]
+    assert result["max_score"] == 0.8
+    assert result["warnings"][0].startswith("retrieved_chunks_empty:")
 
 
 def test_pipeline_reranks_and_runs_consistency_check(monkeypatch):
@@ -95,3 +137,49 @@ def test_pipeline_reranks_and_runs_consistency_check(monkeypatch):
     assert result["max_score"] == 0.92
     assert result["consistency_label"] == "Y"
     assert result["source_details"][0]["file"] == "b.pdf"
+
+
+def test_pipeline_continues_when_reranker_fails(monkeypatch):
+    FakeRetriever.nodes = [
+        FakeNodeWithScore("first doc", 0.7, "a.pdf", "n1"),
+        FakeNodeWithScore("second doc", 0.6, "b.pdf", "n2"),
+    ]
+    monkeypatch.setattr(pipeline_module, "SimpleFusionRetriever", FakeRetriever)
+
+    def fail_rerank(question, texts, top_n):
+        raise RuntimeError("rerank unavailable")
+
+    monkeypatch.setattr(pipeline_module, "aliyun_rerank", fail_rerank)
+    config = {
+        "retrieval": {"enabled": True, "top_k": 1, "use_reranker": True, "initial_top_k": 2},
+    }
+
+    result = RAGPipeline(config, index=object(), client=FakeClient("fallback answer")).answer("question")
+
+    assert result["answer"] == "fallback answer"
+    assert result["sources"] == ["a.pdf"]
+    assert result["max_score"] == 0.7
+    assert result["warnings"][0].startswith("reranker_failed:")
+
+
+def test_pipeline_continues_when_consistency_check_fails(monkeypatch):
+    FakeRetriever.nodes = [
+        FakeNodeWithScore("first doc", 0.7, "a.pdf", "n1"),
+    ]
+    monkeypatch.setattr(pipeline_module, "SimpleFusionRetriever", FakeRetriever)
+
+    def fail_consistency(answer, evidence, client):
+        raise RuntimeError("consistency unavailable")
+
+    monkeypatch.setattr(pipeline_module, "verify_consistency", fail_consistency)
+    config = {
+        "retrieval": {"enabled": True, "top_k": 1, "use_reranker": False},
+        "consistency_check": {"enabled": True},
+    }
+
+    result = RAGPipeline(config, index=object(), client=FakeClient("grounded answer")).answer("question")
+
+    assert result["answer"] == "grounded answer"
+    assert result["consistency_label"] == "N/A"
+    assert result["consistency_reason"] == "Consistency check skipped."
+    assert result["warnings"][0].startswith("consistency_check_failed:")

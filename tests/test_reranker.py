@@ -54,7 +54,11 @@ def test_aliyun_rerank_raises_http_errors(monkeypatch):
 
 
 def test_aliyun_rerank_requires_api_key(monkeypatch):
+    def fail_post(*args, **kwargs):
+        raise AssertionError("requests.post should not be called without API key")
+
     monkeypatch.delenv("DASHSCOPE_API_KEY", raising=False)
+    monkeypatch.setattr("src.rag.reranker.requests.post", fail_post)
 
     with pytest.raises(ValueError):
         aliyun_rerank("query", ["doc-a"])

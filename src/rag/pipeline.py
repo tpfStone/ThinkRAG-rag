@@ -14,10 +14,12 @@ from src.rag.score_gating import should_refuse
 DEFAULT_CONFIG = {
     "retrieval": {"enabled": True, "top_k": 5, "use_reranker": False, "initial_top_k": 20},
     "prompt": {"strict_mode": False},
-    "refuse_gate": {"enabled": False, "max_threshold": 0.5, "spread_threshold": 0.05},
+    "refuse_gate": {"enabled": False, "max_threshold": 0.3, "spread_threshold": 0.0},
     "consistency_check": {"enabled": False},
     "llm": {"model": "qwen-plus", "temperature": 0},
 }
+
+REFUSAL_ANSWER = "根据现有知识库，未找到相关信息。"
 
 
 class RAGPipeline:
@@ -34,6 +36,7 @@ class RAGPipeline:
             "answer": "",
             "sources": [],
             "source_details": [],
+            "warnings": [],
             "max_score": 0.0,
             "refused": False,
             "refusal_reason": "",
@@ -48,16 +51,31 @@ class RAGPipeline:
 
         nodes = self._retrieve(question, self._initial_top_k())
         scores = [self._node_score(node) for node in nodes]
+        nodes, scores = self._filter_nodes_with_text(nodes, scores, result)
+        if not nodes:
+            reason = "retrieved_chunks_empty" if result["warnings"] else "no_valid_text_chunks"
+            return self._refuse(result, reason)
 
         if retrieval_cfg["use_reranker"] and nodes:
-            ranked = aliyun_rerank(
-                question,
-                [self._node_text(node) for node in nodes],
-                retrieval_cfg["top_k"],
-            )
-            filtered = [(idx, score) for idx, score in ranked if 0 <= idx < len(nodes)]
-            nodes = [nodes[idx] for idx, _ in filtered]
-            scores = [score for _, score in filtered]
+            try:
+                ranked = aliyun_rerank(
+                    question,
+                    [self._node_text(node) for node in nodes],
+                    retrieval_cfg["top_k"],
+                )
+                filtered = [(idx, score) for idx, score in ranked if 0 <= idx < len(nodes)]
+                nodes = [nodes[idx] for idx, _ in filtered]
+                scores = [score for _, score in filtered]
+                nodes, scores = self._filter_nodes_with_text(nodes, scores, result)
+            except Exception as e:
+                warning = f"reranker_failed: {type(e).__name__}: {e}"
+                print(warning)
+                result["warnings"].append(warning)
+                nodes = nodes[: int(retrieval_cfg["top_k"])]
+                scores = scores[: int(retrieval_cfg["top_k"])]
+
+        if not nodes:
+            return self._refuse(result, "no_valid_text_chunks")
 
         result["max_score"] = max(scores) if scores else 0.0
         result["sources"] = [self._node_file_name(node) for node in nodes]
@@ -66,10 +84,7 @@ class RAGPipeline:
         if self.config["refuse_gate"]["enabled"]:
             refused, reason = should_refuse(scores, **self.config["refuse_gate"])
             if refused:
-                result["refused"] = True
-                result["refusal_reason"] = reason
-                result["answer"] = "根据现有知识库，未找到相关信息。"
-                return result
+                return self._refuse(result, reason)
 
         context = self._format_context(nodes, scores)
         result["answer"] = self._llm_call(
@@ -79,9 +94,16 @@ class RAGPipeline:
         )
 
         if self.config["consistency_check"]["enabled"]:
-            label, reason = verify_consistency(result["answer"], context, self.client)
-            result["consistency_label"] = label
-            result["consistency_reason"] = reason
+            try:
+                label, reason = verify_consistency(result["answer"], context, self.client)
+                result["consistency_label"] = label
+                result["consistency_reason"] = reason
+            except Exception as e:
+                warning = f"consistency_check_failed: {type(e).__name__}: {e}"
+                print(warning)
+                result["warnings"].append(warning)
+                result["consistency_label"] = "N/A"
+                result["consistency_reason"] = "Consistency check skipped."
 
         return result
 
@@ -90,6 +112,28 @@ class RAGPipeline:
             raise ValueError("RAGPipeline requires an index when retrieval is enabled.")
         retriever = SimpleFusionRetriever(vector_index=self.index, top_k=top_k)
         return retriever.retrieve(question)
+
+    def _refuse(self, result: dict[str, Any], reason: str) -> dict[str, Any]:
+        result["refused"] = True
+        result["refusal_reason"] = reason
+        result["answer"] = REFUSAL_ANSWER
+        return result
+
+    def _filter_nodes_with_text(self, nodes, scores: list[float], result: dict[str, Any]):
+        valid_pairs = []
+        skipped = 0
+        for node, score in zip(nodes, scores):
+            if self._node_text(node).strip():
+                valid_pairs.append((node, score))
+            else:
+                skipped += 1
+
+        if skipped:
+            result["warnings"].append(f"retrieved_chunks_empty: skipped {skipped} empty chunk(s)")
+
+        if not valid_pairs:
+            return [], []
+        return [node for node, _ in valid_pairs], [score for _, score in valid_pairs]
 
     def _format_context(self, nodes, scores: list[float] | None = None) -> str:
         scores = scores or [self._node_score(node) for node in nodes]
@@ -135,6 +179,7 @@ class RAGPipeline:
             "score": float(score) if score is not None else 0.0,
             "text": text[:300],
             "node_id": getattr(getattr(node, "node", node), "node_id", ""),
+            "extraction_method": metadata.get("extraction_method", "native"),
         }
 
     def _node_score(self, node) -> float:

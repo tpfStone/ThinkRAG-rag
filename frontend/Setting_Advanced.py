@@ -1,7 +1,7 @@
 import streamlit as st
 from server.stores.config_store import CONFIG_STORE
 from frontend.state import create_llm_instance
-from config import RESPONSE_MODE
+from config import RESPONSE_MODE, THINKRAG_PARSE_PROVIDER
 
 st.header("Advanced settings")
 advanced_settings = st.container(border=True)
@@ -25,6 +25,18 @@ def change_response_mode():
     st.session_state["current_llm_settings"]["response_mode"] = st.session_state["response_mode"]
     CONFIG_STORE.put(key="current_llm_settings", val=st.session_state["current_llm_settings"])
     create_llm_instance()
+
+def change_strict_mode():
+    st.session_state["current_llm_settings"]["strict_mode"] = st.session_state["strict_mode"]
+    CONFIG_STORE.put(key="current_llm_settings", val=st.session_state["current_llm_settings"])
+
+def change_refuse_gate():
+    st.session_state["current_llm_settings"]["use_refuse_gate"] = st.session_state["use_refuse_gate"]
+    CONFIG_STORE.put(key="current_llm_settings", val=st.session_state["current_llm_settings"])
+
+def change_consistency_check():
+    st.session_state["current_llm_settings"]["use_consistency_check"] = st.session_state["use_consistency_check"]
+    CONFIG_STORE.put(key="current_llm_settings", val=st.session_state["current_llm_settings"])
 
 with advanced_settings:
     col_1, _, col_2 = st.columns([4, 2, 4])
@@ -63,6 +75,33 @@ with advanced_settings:
         index=RESPONSE_MODE.index(st.session_state["current_llm_settings"]["response_mode"]), # simple_summarize by default
         on_change=change_response_mode,
     )
+    st.subheader("RAG pipeline")
+    pipeline_col_1, pipeline_col_2, pipeline_col_3 = st.columns(3)
+    with pipeline_col_1:
+        st.checkbox(
+            "Strict Prompt",
+            help="Ask the model to answer only from retrieved evidence.",
+            value=st.session_state["current_llm_settings"].get("strict_mode", True),
+            key="strict_mode",
+            on_change=change_strict_mode,
+        )
+    with pipeline_col_2:
+        st.checkbox(
+            "Refusal Gate",
+            help="Block answers when retrieval relevance is too weak or ambiguous.",
+            value=st.session_state["current_llm_settings"].get("use_refuse_gate", True),
+            key="use_refuse_gate",
+            on_change=change_refuse_gate,
+        )
+    with pipeline_col_3:
+        st.checkbox(
+            "Consistency Check",
+            help="Check whether the generated answer is supported by retrieved evidence.",
+            value=st.session_state["current_llm_settings"].get("use_consistency_check", True),
+            key="use_consistency_check",
+            on_change=change_consistency_check,
+        )
+    st.caption(f"Document parse provider: `{THINKRAG_PARSE_PROVIDER}`")
 
 # For debug purpost only
 def show_session_state():

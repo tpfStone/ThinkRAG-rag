@@ -6,6 +6,7 @@ data/
 
 # Local Storage
 storage/
+storage_staging/
 .embedding_cache/
 .chroma/
 .lancedb/
