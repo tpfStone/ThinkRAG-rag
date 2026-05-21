@@ -215,13 +215,20 @@ python results/plot_results.py
 results/charts/
 ```
 
+当前默认生成两张自动评测图：
+
+- `refusal_accuracy.png`：不可回答题拒答准确率。
+- `consistency_distribution.png`：C4 一致性标签分布。
+
+`core_metrics.png` 只在 CSV 中包含人工判分列时生成。
+
 注意：
 
 - `results/results_C*.csv` 和 `results/charts/` 默认被 `.gitignore` 忽略。
 - 如果需要保存实验结果，请单独归档 CSV 和图表。
 - 如果需要把实验结果提交进仓库，请先确认 `.gitignore` 策略，避免提交 API Key、本地索引或缓存。
 
-## 12. 人工打分字段
+## 12. 人工打分字段（当前交付不启用）
 
 `eval.py` 自动输出的 CSV 字段包括：
 
@@ -229,7 +236,7 @@ results/charts/
 id, question, answerable, gold_answer, predicted_answer, retrieved_sources, max_score, refused, consistency_label
 ```
 
-人工评分时建议额外加 3 列：
+当前主实验只采用自动可复现指标，不要求人工补评分列。若后续需要统计答案准确率、引用准确率和幻觉率，可在 CSV 中额外加 3 列：
 
 ```text
 correct
@@ -242,6 +249,10 @@ has_hallucination
 - `correct`：答案是否正确。
 - `citation_ok`：引用是否真的支持答案。
 - `has_hallucination`：是否包含知识库不支持的内容。
+
+这些列存在时，`results/summarize.py` 会统计对应指标，`results/plot_results.py` 会额外生成 `core_metrics.png`。这些列不存在时，脚本会跳过该图，不生成空白图。
+
+后续发展方向：可增加 LLM-as-Judge 自动判分脚本，用 `question + gold_answer + predicted_answer + retrieved_sources` 生成 `auto_correct`、`auto_citation_ok`、`auto_has_hallucination` 等列，作为人工评分不足时的近似评估。该结果应标注为自动判分，不能直接等同于三人独立人工评分。
 
 ## 13. 常见问题
 

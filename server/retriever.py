@@ -119,6 +119,7 @@ class SimpleHybridRetriever(BaseRetriever):
 #            https://medium.com/plain-simple-software/distribution-based-score-fusion-dbsf-a-new-approach-to-vector-search-ranking-f87c37488b18
 #            https://docs.llamaindex.ai/en/stable/examples/low_level/fusion_retriever/?h=retrieverqueryengine
 from llama_index.core.retrievers import QueryFusionRetriever
+from llama_index.core.llms import MockLLM
 from enum import Enum
 
 # Three different modes, from LlamaIndex's source code
@@ -149,6 +150,7 @@ class SimpleFusionRetriever(QueryFusionRetriever):
             retriever_weights=[0.6, 0.4],
             similarity_top_k=top_k,
             num_queries=1,  # set this to 1 to disable query generation
+            llm=MockLLM(),
             mode=mode,
             use_async=True,
             verbose=True,

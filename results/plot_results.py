@@ -16,7 +16,7 @@ def _as_bool(series):
 
 def _safe_mean(df: pd.DataFrame, column: str):
     if column not in df.columns:
-        return 0.0
+        return float("nan")
     return float(_as_bool(df[column]).mean())
 
 
@@ -29,7 +29,11 @@ def summarize_file(path: Path) -> dict:
     return {
         "correct_rate": _safe_mean(df, "correct"),
         "citation_ok_rate": _safe_mean(df, "citation_ok"),
-        "hallucination_free_rate": 1.0 - _safe_mean(df, "has_hallucination"),
+        "hallucination_free_rate": (
+            1.0 - _safe_mean(df, "has_hallucination")
+            if "has_hallucination" in df.columns
+            else float("nan")
+        ),
         "refusal_accuracy": refusal_accuracy,
     }
 
@@ -43,22 +47,36 @@ def load_summaries(results_dir: Path) -> pd.DataFrame:
         else:
             row = {
                 "config": cfg,
-                "correct_rate": 0.0,
-                "citation_ok_rate": 0.0,
-                "hallucination_free_rate": 0.0,
-                "refusal_accuracy": 0.0,
+                "correct_rate": float("nan"),
+                "citation_ok_rate": float("nan"),
+                "hallucination_free_rate": float("nan"),
+                "refusal_accuracy": float("nan"),
             }
         rows.append(row)
     return pd.DataFrame(rows)
 
 
 def plot_core_metrics(summary: pd.DataFrame, charts_dir: Path) -> None:
-    ax = summary.set_index("config").plot(kind="bar", ylim=(0, 1), figsize=(10, 5))
-    ax.set_ylabel("Rate")
-    ax.set_title("Core Evaluation Metrics")
-    ax.legend(loc="lower right")
+    output_path = charts_dir / "core_metrics.png"
+    metric_columns = [
+        "correct_rate",
+        "citation_ok_rate",
+        "hallucination_free_rate",
+    ]
+    available_columns = [
+        column for column in metric_columns if column in summary and summary[column].notna().any()
+    ]
+    if available_columns:
+        ax = summary.set_index("config")[available_columns].plot(kind="bar", ylim=(0, 1), figsize=(10, 5))
+        ax.set_ylabel("Rate")
+        ax.set_title("Core Evaluation Metrics")
+        ax.legend(loc="lower right")
+    else:
+        output_path.unlink(missing_ok=True)
+        print("Skipped core metrics chart: judged metric columns are not available.")
+        return
     plt.tight_layout()
-    plt.savefig(charts_dir / "core_metrics.png", dpi=200)
+    plt.savefig(output_path, dpi=200)
     plt.close()
 
 
