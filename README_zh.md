@@ -32,14 +32,19 @@ ThinkRAG 是一个基于原 ThinkRAG 改造的 RAG 问答与评测系统，当�
 
 ## 当前模型与配置
 
-| 能力 | 默认配置 |
+| 能力 | 当前配置 |
 |---|---|
-| 生成模型 | `qwen-plus` |
-| 一致性验证模型 | `qwen-flash` |
-| Embedding | `text-embedding-v4` |
-| Reranker | `qwen3-rerank` |
+| 生成模型 | C4 中使用 `qwen-plus`，`temperature: 0`。 |
+| 问题/文档向量化模型 | 阿里云百炼 / DashScope `text-embedding-v4`，维度 `1024`，由 `CachedAliyunEmbedding` 封装，并使用本地 `.embedding_cache` 缓存。 |
+| 向量检索框架 | LlamaIndex `SimpleFusionRetriever`，融合 `VectorIndexRetriever` 与中文分词版 `BM25Retriever`，底层使用 `QueryFusionRetriever`；默认融合模式为 `dist_based_score`，权重为向量检索 `0.6`、BM25 `0.4`。 |
+| 重排序框架 | DashScope rerank API，模型为 `qwen3-rerank`，接口为 `/compatible-api/v1/reranks`；C4 先取 `initial_top_k=20`，再重排到 `top_k=5`。 |
+| 分数门控拒答门槛 | C4 启用拒答门控，当前为 `max_threshold: 0.33`、`spread_threshold: 0.02`；无候选、`max_score < max_threshold` 或 `max_score - mean(top_scores) < spread_threshold` 时触发拒答。 |
+| 强约束 prompt | `prompt.strict_mode=true` 时使用 `STRICT_RAG_PROMPT`，C3/C4 默认启用；要求只基于检索证据回答，证据不足时输出固定拒答文本，并按 `引用：[1][2]` 格式列出引用。 |
+| 一致性验证模型 | C4 使用 `qwen-flash` 在生成后检查回答是否由检索证据支持，输出 `Y`、`P`、`N` 标签。 |
 | API Key | `DASHSCOPE_API_KEY` |
-| 默认存储 | 开发模式本地文件存储 |
+| 默认存储 | 开发模式使用本地文件存储，索引写入 `storage/`。 |
+
+分数门控阈值的实验过程和当前推荐值见 [docs/score_gating_experiment_summary.md](docs/score_gating_experiment_summary.md)。
 
 ## 快速开始
 

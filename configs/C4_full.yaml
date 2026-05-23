@@ -10,8 +10,8 @@ refuse_gate:
   # Preliminary empirical defaults. The originally planned 0.5 / 0.05 threshold
   # was too strict for the current score distribution and caused over-refusal.
   # Recalibrate after the formal 25-question evaluation set is available.
-  max_threshold: 0.3
-  spread_threshold: 0.0
+  max_threshold: 0.33
+  spread_threshold: 0.02
 consistency_check:
   enabled: true
 llm:

@@ -32,14 +32,19 @@ See [docs/deployment.md](docs/deployment.md) for the full deployment, runtime, a
 
 ## Current Models And Config
 
-| Capability | Default |
+| Capability | Current setting |
 |---|---|
-| Generation model | `qwen-plus` |
-| Consistency-check model | `qwen-flash` |
-| Embedding | `text-embedding-v4` |
-| Reranker | `qwen3-rerank` |
+| Generation model | `qwen-plus`, temperature `0` in C4. |
+| Question/document vectorization model | Alibaba Cloud Bailian / DashScope `text-embedding-v4`, `1024` dimensions, wrapped by `CachedAliyunEmbedding` with local `.embedding_cache` reuse. |
+| Vector retrieval framework | LlamaIndex `SimpleFusionRetriever`, combining `VectorIndexRetriever` and Chinese-tokenized `BM25Retriever` through `QueryFusionRetriever`; default fusion mode is `dist_based_score`, with weights `0.6` vector and `0.4` BM25. |
+| Reranking framework | DashScope rerank API, model `qwen3-rerank`, endpoint `/compatible-api/v1/reranks`; C4 retrieves `initial_top_k=20` then reranks to `top_k=5`. |
+| Score-gated refusal threshold | Enabled in C4 with `max_threshold: 0.33` and `spread_threshold: 0.02`; the gate refuses when there are no candidates, when `max_score < max_threshold`, or when `max_score - mean(top_scores) < spread_threshold`. |
+| Strict RAG prompt | `STRICT_RAG_PROMPT` is enabled when `prompt.strict_mode=true` in C3/C4; it requires answers to be based only on retrieved evidence, uses the fixed refusal text when evidence is insufficient, and asks for citations such as `引用：[1][2]`. |
+| Consistency-check model | `qwen-flash`, used after generation in C4 to label whether the answer is supported by retrieved evidence as `Y`, `P`, or `N`. |
 | API key | `DASHSCOPE_API_KEY` |
-| Default storage | Local file storage in development mode |
+| Default storage | Local file storage in development mode; indexes are persisted under `storage/`. |
+
+The current score-gating threshold rationale and experiment results are documented in [docs/score_gating_experiment_summary.md](docs/score_gating_experiment_summary.md).
 
 ## Quick Start
 
